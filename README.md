@@ -27,14 +27,14 @@ Settings:
 
 ZoneMinder Camera Settings (DS-2CD2332-I):
 General Tab
-Name: Camera1_mol-
-Source Type: Remote
-Source Tab
-Remote Protocol: RSTP
-Remote Method: RTP/RSTP
-Remote Host Name: user:pass@192.168.1.1
-Remote Host Port:554
-Remote Host Path: /Streaming/Channels/1
-Target Colorspace: 24 bit	
-Capture Width (pixels): 1920
-Capture Height (pixels): 1080
+- Name: Camera1_mol-
+- Source Type: Remote
+- Source Tab
+- Remote Protocol: RSTP
+- Remote Method: RTP/RSTP
+- Remote Host Name: user:pass@192.168.1.1
+- Remote Host Port:554
+- Remote Host Path: /Streaming/Channels/1
+- Target Colorspace: 24 bit	
+- Capture Width (pixels): 1920
+- Capture Height (pixels): 1080
