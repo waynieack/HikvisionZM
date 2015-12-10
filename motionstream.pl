@@ -1,40 +1,4 @@
 #!/usr/bin/perl
-
-#############################################################################
-# Name: motionstream.pl ZoneMinder motion detection offload to camera
-#
-# Description: This script is for intergrating the motion detection on Hikvision
-# cameras with Zoneminder reducing CPU usage on the zonminder server allowing for 
-# a highly scailable solution
-#
-# Depends use Time::Piece, threads, ZoneMinder, DBI, LWP::UserAgent
-#
-# Author: Wayne Gatlin (wayne@razorcla.ws)
-# $Revision: $
-# $Date: $
-#
-##############################################################################
-# Copyright       Wayne Gatlin, 2015, All rights reserved
-##############################################################################
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
-###############################################################################
-
 #use strict;
 use warnings;
 use Time::Piece;
@@ -42,21 +6,33 @@ use threads;
 use ZoneMinder;
 use DBI;
 use LWP::UserAgent;
-
+use Fcntl ':flock';
 
 
 my $alarmdelay = 10; #amount of time in seconds we wait before marking the motion event inactive
 my $matchstr = '_mol-'; #Find any monitor with "_mol-" in the name
 my $httptimeout = 30; #Amount of time we wait before saying the http stream is timed out in seconds
 my $httpretry = 30; #Amount of time we wait before trying to reconnect to a timeout http stream in seconds
-my %alarmtypeval; #Get other alarm types
-$alarmtypeval{'VMD'} = '100';
-$alarmtypeval{'linedetection'} = '150';
+my $PidPath ="/var/run/motionstream.pid"; #Create pid file so only 1 instance can run
+
+my %alarmtypeval; # Set zoneminder score for detection types
+$alarmtypeval{'VMD'} = '100'; 		 # Motion Detection
+$alarmtypeval{'shelteralarm'} = '120';   # Video Tampering
+$alarmtypeval{'fielddetection'} = '140'; # Intrusion Detection
+$alarmtypeval{'linedetection'} = '150';  # Line Crossing Detection
 
 my %alarm;
 my %monitors;
 my %rcvbuf;
 my %params;
+
+
+open( LH, '>', $PidPath ) or die "Can't open $PidPath for locking!\nError: $!\n";
+ # lock file so that it can only be accessed
+ # by the current running script
+flock LH, LOCK_EX|LOCK_NB
+or die "$PidPath is already running somewhere!\n$!";
+print LH $$;
 
 
 &loadMonitors;
@@ -111,20 +87,15 @@ while (1) {
      $Chunk = "$1$2"; #print $Chunk;
 	 $msg = $3; #grab whats left after the full message
 		    #to see if its a full message on the next loop
-		    #or save it to the buffer 
-	  if ( $Chunk =~ m/<eventType>VMD</) {
-              &inserthash($Chunk);
-	     #print "-----------------------\n";
-             #print $alarm->{$tid}->{$ip}->{'VMD'}->{"dateTime"}."-- VMD -- Active\n";
-             #print "-----------------------\n";
-
-           }
-	   elsif ( $Chunk =~ m/<eventType>linedetection</) {
-              &inserthash($Chunk);
-            #print "-----------------------\n";
-            #print $alarm->{$tid}->{$ip}->{'linedetection'}->{"dateTime"}."-- linedetection -- Active\n";
-            #print "-----------------------\n";
-
+		    #or save it to the buffer
+	   foreach my $eventype ( keys %alarmtypeval ) {
+	    $eventype = '<eventType>'.$eventype.'<'; 
+	    if ( $Chunk =~ m/$eventype/) {
+               &inserthash($Chunk);
+	       #print "-----------------------\n";
+               #print $alarm->{$tid}->{$ip}->{'VMD'}->{"dateTime"}."-- VMD -- Active\n";
+               #print "-----------------------\n";
+             }
 	   }
           if (!length($msg)) { last } 
     } else {
@@ -163,7 +134,7 @@ sub activatezmalarm {
  my $thr = threads->self(); my $tid = $thr->tid;
  my $function = $monitors->{$ip}->{'FUNCT'};
    if ( !zmIsAlarmed( $monitors->{$ip}->{'HASH'} ) and ($function eq 'Record' or $function eq 'Nodect') ) {
-	  # zmTriggerEventCancel( $monitors->{$ip}->{'HASH'} );
+	   zmTriggerEventCancel( $monitors->{$ip}->{'HASH'} );
            zmTriggerEventOn( $monitors->{$ip}->{'HASH'}, $alarmtypeval{$type}, $type, $type );
            print "$ip -- monitor triggered by $type \n";
            $alarm->{$tid}->{$ip}->{$type}->{"isActive"} = 1;
@@ -171,7 +142,7 @@ sub activatezmalarm {
          }
      my ( $AlarmScore, $AlarmCause ) = zmMemRead( $monitors->{$ip}->{'HASH'}, [ "trigger_data:trigger_score", "trigger_data:trigger_cause" ] );
         if (($alarmtypeval{$type} > $AlarmScore) and ($function eq 'Record' or $function eq 'Nodect')) {
-	   # zmTriggerEventCancel( $monitors->{$ip}->{'HASH'} );
+	    zmTriggerEventCancel( $monitors->{$ip}->{'HASH'} );
             zmTriggerEventOn( $monitors->{$ip}->{'HASH'}, $alarmtypeval{$type}, $type, $type );
             $alarm->{$tid}->{$ip}->{$type}->{"isActive"} = 1;
             print "$ip -- monitor updated by $type \n";

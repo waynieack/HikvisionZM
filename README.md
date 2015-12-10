@@ -23,6 +23,8 @@ Settings:
  - - $httptimeout #Amount of time we wait before saying the http stream is timed out in seconds
  - - $httpretry #Amount of time we wait before trying to reconnect to a timeout http stream in seconds
  - - $alarmtypeval{'VMD'} = '100'; #Set the score for the Motion Detection event type here
+ - - $alarmtypeval{'shelteralarm'} = '120';   #Set the score for Video Tampering Detection event type here
+ - - $alarmtypeval{'fielddetection'} = '140'; #Set the score for Intrusion Detection event type here
  - - $alarmtypeval{'linedetection'} = '150'; #Set the score for the Line crossing detection event type here
 
 ZoneMinder Camera Settings (DS-2CD2332-I):
