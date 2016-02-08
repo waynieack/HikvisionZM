@@ -11,9 +11,10 @@ use Fcntl ':flock';
 
 my $alarmdelay = 10; #amount of time in seconds we wait before marking the motion event inactive
 my $matchstr = '_mol-'; #Find any monitor with "_mol-" in the name
-my $httptimeout = 30; #Amount of time we wait before saying the http stream is timed out in seconds
+my $httptimeout = 40; #Amount of time we wait before saying the http stream is timed out in seconds
 my $httpretry = 30; #Amount of time we wait before trying to reconnect to a timeout http stream in seconds
-my $PidPath ="/var/run/motionstream.pid"; #Create pid file so only 1 instance can run
+my $PidPath = "/var/run/motionstream.pid"; #Create pid file so only 1 instance can run
+my $LogPath = "/var/log/";
 
 my %alarmtypeval; # Set zoneminder score for detection types
 $alarmtypeval{'VMD'} = '100'; 		 # Motion Detection
@@ -42,6 +43,7 @@ sub startthreads
 {
  my @threads;
     foreach my $ip ( keys %{$monitors} ) { 
+       #open($monitors->{$ip}->{'FH'}, '>>', $LogPath."motionstream-$ip.log");
        push @threads, async { (\&startstream($monitors->{$ip}->{'CREDS'},$ip)) };
     }
     foreach (@threads) {
@@ -54,8 +56,19 @@ sub startthreads
 sub startstream {
  my $thr = threads->self(); my $tid = $thr->tid;
  my ($creds, $ip) = @_;
- print "Starting thread $tid for IP $ip\n";
- my $ua = LWP::UserAgent->new();
+ #my $FH = $monitors->{$ip}->{'FH'};
+  #open($monitors->{$ip}->{'FH'}, '>>', $LogPath."motionstream-$ip.log");
+  #print {$monitors->{$ip}->{'FH'}} "Starting thread $tid for IP $ip\n";
+ # open(FH, '>>', $LogPath."motionstream-$ip.log");
+ # print FH "Starting thread $tid for IP $ip\n";
+my $OUTFILE;
+open $OUTFILE, '>>', $LogPath."motionstream-$ip.log"
+    or print "Cannot open $files: $OS_ERROR";
+print { $OUTFILE } "Starting thread $tid for IP $ip\n"
+    or print "Cannot write to $files: $OS_ERROR";
+
+  print "Starting thread $tid for IP $ip\n";
+my $ua = LWP::UserAgent->new();
  $ua->timeout($httptimeout);
  my $req = $ua->get('http://'.$creds.'@'.$ip.'/ISAPI/Event/notification/alertStream',
                                         ':content_cb' => \&ReadStream,
@@ -133,10 +146,11 @@ sub activatezmalarm {
  my $ip = $_[0]; my $type = $_[1];
  my $thr = threads->self(); my $tid = $thr->tid;
  my $function = $monitors->{$ip}->{'FUNCT'};
+ &validatemem($ip);
    if ( !zmIsAlarmed( $monitors->{$ip}->{'HASH'} ) and ($function eq 'Record' or $function eq 'Nodect') ) {
 	   zmTriggerEventCancel( $monitors->{$ip}->{'HASH'} );
            zmTriggerEventOn( $monitors->{$ip}->{'HASH'}, $alarmtypeval{$type}, $type, $type );
-           print "$ip -- monitor triggered by $type \n";
+           print "$ip -- monitor triggered by $type  - $monitors->{$ip}->{'HASH'}\n";
            $alarm->{$tid}->{$ip}->{$type}->{"isActive"} = 1;
            return 1;
          }
@@ -224,6 +238,7 @@ sub disablezmalarm {
  my @activetype = &checkforactivecount($ip);
  my $function = $monitors->{$ip}->{'FUNCT'};
  my $activecount = scalar @activetype;
+ &validatemem($ip);
 
  if ( $function eq 'Modect' or $function eq 'Mocord' ) { #need to figure out how to check if the monitor is suspended, get auto resume time
               if ($activecount > 1) {
@@ -277,6 +292,22 @@ sub disablezmalarm {
   }
 
 
+sub validatemem {
+   my $ip = $_[0];
+   my $mr = zmMemRead($monitors->{$ip}->{'HASH'}, "shared_data:valid");
+   print ("Checking Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." MemReadResult:$mr Name:".$monitors->{$ip}->{'HASH'}->{Name}." MMap address:".$monitors->{$ip}->{'HASH'}->{MMapAddr}."\n");
+         while ($mr!="1") {
+                 zmMemInvalidate($monitors->{$ip}->{'HASH'});
+                 my $mv =zmMemVerify($monitors->{$ip}->{'HASH'});
+		if (!defined($mv)) { 
+		    print ("Cant verify memory for ".$monitors->{$ip}->{'HASH'}->{Id}.", zoneminder may be stopped\n");
+		    $mr = 0; sleep 3;
+		} else {
+                    print ("Reloading memory for ".$monitors->{$ip}->{'HASH'}->{Id}.", status of verify is:$mv\n");
+                    $mr = zmMemRead($monitors->{$ip}->{'HASH'}, "shared_data:valid");
+		} 
+         }
+}
 
 
 sub isAlarmInactive {
@@ -309,7 +340,12 @@ return 0;
 
 sub loadMonitors
 {
+#my $ip = $_[0] if (defined $_[0]);
 my @ipcred; my $sql; my $sth; my $res;
+
+#if (defined $ip) { $sql = "select Host,Id,Name,Function from Monitors WHERE Host like '%$ip'" }
+#else { $sql = "select Host,Id,Name,Function from Monitors where find_in_set( Function, 'Modect,Record,Nodect,Mocord' )" }
+
 	my $dbh = zmDbConnect();
         $sql = "select Host,Id,Name,Function from Monitors where find_in_set( Function, 'Modect,Record,Nodect,Mocord' )";
         $sth = $dbh->prepare_cached( $sql ) or Fatal( "Can't prepare '$sql': ".$dbh->errstr() );
