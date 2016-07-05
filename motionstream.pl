@@ -21,6 +21,7 @@ $alarmtypeval{'VMD'} = '100'; 		 # Motion Detection
 $alarmtypeval{'shelteralarm'} = '120';   # Video Tampering
 $alarmtypeval{'fielddetection'} = '140'; # Intrusion Detection
 $alarmtypeval{'linedetection'} = '150';  # Line Crossing Detection
+$alarmtypeval{'PIR'} = '200';		 # IR Motion Detection  
 
 my %alarm;
 my %monitors;
