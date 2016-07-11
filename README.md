@@ -10,9 +10,6 @@ What it does:
  - The camera I tested with is the DS-2CD2332-I and it has 4 event types: Line crossing detection, Intrusion detection, Motion Detection, and Video Tampering. You can set a different score for each type (they must be different) and if more than 1 even is active at the same time, the highest score will show as the active even in zoneminder. If you have all 4 events active at the same time and the highest scored event ends first, then the next highest event will become active and you will see the score in zoneminder change.
  - This script must be run on the zoneminder server and the following perl modules are required: Time::Piece, threads, ZoneMinder, DBI, LWP::UserAgent.
  - TODO: 
- - - Add Video Tampering and Intrusion detection event types. 
- - - Figure out a good way to start and stop the script with zoneminder.
- - - Test multi camera. 
  - - Figure out how to detect a change in monitor mode (Modect, etc). Query sql on a timed interval? Is there a perl function to get this instead of a sql call?
  - - Figure out why event cause in zonminder is blank when using record mode.
  - - Add options to use use certain camera event types to trigger forced alarms for Modect or Mocord and disable Hybrid mode. 
