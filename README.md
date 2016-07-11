@@ -44,18 +44,18 @@ ZoneMinder Camera Settings (DS-2CD2332-I):
 
 For starting and stopping the script, I use monit. It also does a good job for ZM and mysql.
 I use the following settings:
--check process mysql with pidfile /var/run/mysqld/mysqld.pid
+- check process mysql with pidfile /var/run/mysqld/mysqld.pid
 -     start program = "/etc/init.d/mysql start"
 -     stop program = "/etc/init.d/mysql stop"
 -     if changed PID then exec "/etc/init.d/zoneminder restart"
 
--check process zoneminder with pidfile /var/run/zm/zm.pid
+- check process zoneminder with pidfile /var/run/zm/zm.pid
 -    start program = "/etc/init.d/zoneminder start"
 -    stop program  = "/etc/init.d/zoneminder stop"
 -    depends on mysql
 -    if changed PID then exec "/usr/bin/killall motionstream.pl; /home/wayne/motionstream.pl&"
 
--check process motionstream with pidfile /var/run/motionstream.pid
+- check process motionstream with pidfile /var/run/motionstream.pid
 -    start program = "/home/wayne/motionstream.pl&" with timeout 60 seconds
 -    stop program  = "/usr/bin/killall motionstream.pl"
 -    depends on zoneminder
