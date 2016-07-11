@@ -10,11 +10,14 @@ use Fcntl ':flock';
 
 
 my $alarmdelay = 10; #amount of time in seconds we wait before marking the motion event inactive
-my $matchstr = '_mol-'; #Find any monitor with "_mol-" in the name
+my $matchstr = '_mol-'; #Find any monitor with "_mol-" in the name. This can be changed to anything you like.
 my $httptimeout = 40; #Amount of time we wait before saying the http stream is timed out in seconds
 my $httpretry = 30; #Amount of time we wait before trying to reconnect to a timeout http stream in seconds
 my $PidPath = "/var/run/motionstream.pid"; #Create pid file so only 1 instance can run
 my $LogPath = "/var/log/";
+my $ISAPI = '/ISAPI'; #In some camera models this is not in the path, set to "my $ISAPI = ''" if the script does not work.
+# You can test with the following curl command, it does not work try with out the /ISAPI
+# curl -s -S -N -u username:password http://192.168.1.10/ISAPI/System/time/localTime  
 
 my %alarmtypeval; # Set zoneminder score for detection types
 $alarmtypeval{'VMD'} = '100'; 		 # Motion Detection
@@ -71,7 +74,7 @@ print { $OUTFILE } "Starting thread $tid for IP $ip\n"
   print "Starting thread $tid for IP $ip\n";
 my $ua = LWP::UserAgent->new();
  $ua->timeout($httptimeout);
- my $req = $ua->get('http://'.$creds.'@'.$ip.'/ISAPI/Event/notification/alertStream',
+ my $req = $ua->get('http://'.$creds.'@'.$ip.$ISAPI.'/Event/notification/alertStream',
                                         ':content_cb' => \&ReadStream,
                                         ':read_size_hint' => 540,);
 
@@ -322,7 +325,7 @@ sub isAlarmInactive {
 
  #my $time = `$curl -s -S -N -u $monitors->{$ip}->{'CREDS'} http://$ip/ISAPI/System/time/localTime`; # Get the current time from the cam
  
-  my $req = $ua->get('http://'.$monitors->{$ip}->{'CREDS'}.'@'.$ip.'/ISAPI/System/time/localTime');
+  my $req = $ua->get('http://'.$monitors->{$ip}->{'CREDS'}.'@'.$ip.$ISAPI.'/System/time/localTime');
   if ($req->is_success) {
      $time = $req->content;
    } else {
@@ -353,7 +356,7 @@ my @ipcred; my $sql; my $sth; my $res;
         $res = $sth->execute() or Fatal( "Can't execute: ".$sth->errstr() );
         while( my $row = $sth->fetchrow_hashref() )
         {
-		  if (!($row->{Name} =~ m/$matchstr$/)) { next }
+		  if (!($row->{Name} =~ m/$matchstr/)) { next }
                   my @ipcred = split('@', $row->{Host});
                   $monitors->{$ipcred[1]}->{'ID'} = $row->{Id};
                   $monitors->{$ipcred[1]}->{'CREDS'} = $ipcred[0];
