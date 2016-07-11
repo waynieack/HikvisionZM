@@ -16,13 +16,17 @@ What it does:
 
 Settings:
  - - $alarmdelay #amount of time in seconds we wait before marking the motion event inactive
- - - $matchstr #Find any monitor with "_mol-" in the name
+ - - $matchstr #Find any monitor with "_mol-" in the name. This can be changed to anything you like.
  - - $httptimeout #Amount of time we wait before saying the http stream is timed out in seconds
  - - $httpretry #Amount of time we wait before trying to reconnect to a timeout http stream in seconds
  - - $alarmtypeval{'VMD'} = '100'; #Set the score for the Motion Detection event type here
  - - $alarmtypeval{'shelteralarm'} = '120';   #Set the score for Video Tampering Detection event type here
  - - $alarmtypeval{'fielddetection'} = '140'; #Set the score for Intrusion Detection event type here
  - - $alarmtypeval{'linedetection'} = '150'; #Set the score for the Line crossing detection event type here
+ - - my $ISAPI = '/ISAPI'; #In some camera models this is not in the path, set to "my $ISAPI = ''" if the script does not work.
+# You can test with the following curl command, it does not work try with out the /ISAPI
+# curl -s -S -N -u username:password http://192.168.1.10/ISAPI/System/time/localTime
+
 
 ZoneMinder Camera Settings (DS-2CD2332-I):
 - General Tab
