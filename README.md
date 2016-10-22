@@ -56,6 +56,7 @@
 
 NOTE - If your camera will only work with FFMpeg, the code now checks for the FFMpeg setting and pulls the username and password from the Path field. The Path format should be: rtsp://username:password@192.168.1.10:554/Streaming/Channels/1
 
+##### Monit:
 For starting and stopping the script, I use monit. It also does a good job for ZM and mysql.
 I use the following settings in my /etc/monit/monitrc:
 
