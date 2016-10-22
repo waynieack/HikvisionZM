@@ -345,19 +345,27 @@ return 0;
 sub loadMonitors
 {
 #my $ip = $_[0] if (defined $_[0]);
-my @ipcred; my $sql; my $sth; my $res;
+my @ipcred; my $sql; my $sth; my $res; my $cred;
 
 #if (defined $ip) { $sql = "select Host,Id,Name,Function from Monitors WHERE Host like '%$ip'" }
 #else { $sql = "select Host,Id,Name,Function from Monitors where find_in_set( Function, 'Modect,Record,Nodect,Mocord' )" }
 
 	my $dbh = zmDbConnect();
-        $sql = "select Host,Id,Name,Function from Monitors where find_in_set( Function, 'Modect,Record,Nodect,Mocord' )";
+        $sql = "select Host,Id,Name,Function,Type,Path from Monitors where find_in_set( Function, 'Modect,Record,Nodect,Mocord' )";
         $sth = $dbh->prepare_cached( $sql ) or Fatal( "Can't prepare '$sql': ".$dbh->errstr() );
         $res = $sth->execute() or Fatal( "Can't execute: ".$sth->errstr() );
         while( my $row = $sth->fetchrow_hashref() )
         {
 		  if (!($row->{Name} =~ m/$matchstr/)) { next }
-                  my @ipcred = split('@', $row->{Host});
+		  if ($row->{Type} eq 'Ffmpeg') { 
+		     $cred = $row->{Path};
+		     $cred =~ s/rtsp:\/\///;
+                     $cred =~ s/\/.*//;
+		     if ($cred =~ /(.*@.*):.*$/) { $cred = $1; } 
+		   } else {
+		     $cred = $row->{Host};
+		   }
+                  @ipcred = split('@', $cred);
                   $monitors->{$ipcred[1]}->{'ID'} = $row->{Id};
                   $monitors->{$ipcred[1]}->{'CREDS'} = $ipcred[0];
                   $monitors->{$ipcred[1]}->{'HASH'} = $row;
