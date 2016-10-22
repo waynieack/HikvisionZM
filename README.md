@@ -57,20 +57,22 @@ ZoneMinder Camera Settings (DS-2CD2332-I):
 NOTE - If your camera will only work with FFMpeg, the code now checks for the FFMpeg setting and pulls the username and password from the Path field. The Path format should be: rtsp://username:password@192.168.1.10:554/Streaming/Channels/1
 
 For starting and stopping the script, I use monit. It also does a good job for ZM and mysql.
-I use the following settings:
-- check process mysql with pidfile /var/run/mysqld/mysqld.pid
--     start program = "/etc/init.d/mysql start"
--     stop program = "/etc/init.d/mysql stop"
--     if changed PID then exec "/etc/init.d/zoneminder restart"
+I use the following settings in my /etc/monit/monitrc:
 
-- check process zoneminder with pidfile /var/run/zm/zm.pid
--    start program = "/etc/init.d/zoneminder start"
--    stop program  = "/etc/init.d/zoneminder stop"
--    depends on mysql
--    if changed PID then exec "/usr/bin/killall motionstream.pl; /home/wayne/motionstream.pl&"
+```
+ check process mysql with pidfile /var/run/mysqld/mysqld.pid
+     start program = "/etc/init.d/mysql start"
+     stop program = "/etc/init.d/mysql stop"
+     if changed PID then exec "/etc/init.d/zoneminder restart"
 
-- check process motionstream with pidfile /var/run/motionstream.pid
--    start program = "/home/wayne/motionstream.pl&" with timeout 60 seconds
--    stop program  = "/usr/bin/killall motionstream.pl"
--    depends on zoneminder
+ check process zoneminder with pidfile /var/run/zm/zm.pid
+    start program = "/etc/init.d/zoneminder start"
+    stop program  = "/etc/init.d/zoneminder stop"
+    depends on mysql
+    if changed PID then exec "/usr/bin/killall motionstream.pl; /home/wayne/motionstream.pl&"
 
+ check process motionstream with pidfile /var/run/motionstream.pid
+    start program = "/home/wayne/motionstream.pl&" with timeout 60 seconds
+    stop program  = "/usr/bin/killall motionstream.pl"
+    depends on zoneminder
+```
