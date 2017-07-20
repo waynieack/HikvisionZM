@@ -1,7 +1,7 @@
 # HikvisionZM
-Hikvision ZoneMinder plugin to use in camera motion detection
+###Hikvision ZoneMinder plugin to use in camera motion detection
 
-What it does:
+#####What it does:
  - connects to the zoneminder database looks for all monitors with the specified string "$matchstr" on the end of the name. Default: "_mol-" (so your monitor name in zoneminder would be "mymonitor_mol-") There may be a better way to do this, I'm open to suggestions. 
  - The camera username and password are pulled from the "remote hostname" section of the camera config in zoneminder IE: user:pass@192.168.1.10  
  - The script then connects to each cameras http push stream and waits for a motion event to be sent. The script is threaded so each camera stream is opened in a new thread.
@@ -17,7 +17,7 @@ What it does:
  - Note - when configuring motion detection on the camera, the only thing that needs to be enabled is the detection type you want and the schedule. The schedule by default is set to enabled 24x7 when the detection type is enabled, but if you change it then during the disabled times the camera will not send events to the script. 
 
 
- TODO: 
+##### TODO: 
  - - Figure out how to detect a change in monitor mode (Modect, etc). Query sql on a timed interval? Is there a perl function to get this instead of a sql call?
  - - Figure out why event cause in zoneminder is blank when using record mode.
  - - Add options to use use certain camera event types to trigger forced alarms for Modect or Mocord and disable Hybrid mode.
@@ -25,7 +25,7 @@ What it does:
  - Write init script.
 
 
-Settings:
+##### Settings:
  - - $alarmdelay #amount of time in seconds we wait before marking the motion event inactive
  - - $matchstr #Find any monitor with "_mol-" in the name. This can be changed to anything you like.
  - - $httptimeout #Amount of time we wait before saying the http stream is timed out in seconds
@@ -40,7 +40,7 @@ Settings:
  -  curl -s -S -N -u username:password http://192.168.1.10/ISAPI/System/time/localTime
 
 
-ZoneMinder Camera Settings (DS-2CD2332-I):
+##### ZoneMinder Camera Settings (DS-2CD2332-I):
 - General Tab
 - - Name: Camera1_mol-
 - - Source Type: Remote
@@ -54,21 +54,26 @@ ZoneMinder Camera Settings (DS-2CD2332-I):
 - - Capture Width (pixels): 1920
 - - Capture Height (pixels): 1080
 
+NOTE - If your camera will only work with FFMpeg, the code now checks for the FFMpeg setting and pulls the username and password from the Path field. The Path format should be: rtsp://username:password@192.168.1.10:554/Streaming/Channels/1
+
+##### Monit:
 For starting and stopping the script, I use monit. It also does a good job for ZM and mysql.
-I use the following settings:
-- check process mysql with pidfile /var/run/mysqld/mysqld.pid
--     start program = "/etc/init.d/mysql start"
--     stop program = "/etc/init.d/mysql stop"
--     if changed PID then exec "/etc/init.d/zoneminder restart"
+I use the following settings in my /etc/monit/monitrc:
 
-- check process zoneminder with pidfile /var/run/zm/zm.pid
--    start program = "/etc/init.d/zoneminder start"
--    stop program  = "/etc/init.d/zoneminder stop"
--    depends on mysql
--    if changed PID then exec "/usr/bin/killall motionstream.pl; /home/wayne/motionstream.pl&"
+```
+ check process mysql with pidfile /var/run/mysqld/mysqld.pid
+     start program = "/etc/init.d/mysql start"
+     stop program = "/etc/init.d/mysql stop"
+     if changed PID then exec "/etc/init.d/zoneminder restart"
 
-- check process motionstream with pidfile /var/run/motionstream.pid
--    start program = "/home/wayne/motionstream.pl&" with timeout 60 seconds
--    stop program  = "/usr/bin/killall motionstream.pl"
--    depends on zoneminder
+ check process zoneminder with pidfile /var/run/zm/zm.pid
+    start program = "/etc/init.d/zoneminder start"
+    stop program  = "/etc/init.d/zoneminder stop"
+    depends on mysql
+    if changed PID then exec "/usr/bin/killall motionstream.pl; /home/wayne/motionstream.pl&"
 
+ check process motionstream with pidfile /var/run/motionstream.pid
+    start program = "/home/wayne/motionstream.pl&" with timeout 60 seconds
+    stop program  = "/usr/bin/killall motionstream.pl"
+    depends on zoneminder
+```
