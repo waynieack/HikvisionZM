@@ -8,6 +8,7 @@ use DBI;
 use LWP::UserAgent;
 use Fcntl ':flock';
 
+# Version 1.2.1
 
 my $alarmdelay = 60; #amount of time in seconds we wait before marking the motion event inactive
 my $matchstr = '_mol-'; #Find any monitor with "_mol-" in the name. This can be changed to anything you like.
@@ -156,7 +157,7 @@ sub activatezmalarm {
    if ( !zmIsAlarmed( $monitors->{$ip}->{'HASH'} ) and ($function eq 'Record' or $function eq 'Nodect') ) {
 	   zmTriggerEventCancel( $monitors->{$ip}->{'HASH'} );
            zmTriggerEventOn( $monitors->{$ip}->{'HASH'}, $alarmtypeval{$type}, $type, $type );
-           print "$ip - $time - monitor triggered by $type  - $monitors->{$ip}->{'HASH'}\n";
+           print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." triggered by $type\n";
            $alarm->{$tid}->{$ip}->{$type}->{"isActive"} = 1;
            return 1;
          }
@@ -165,12 +166,12 @@ sub activatezmalarm {
 	    zmTriggerEventCancel( $monitors->{$ip}->{'HASH'} );
             zmTriggerEventOn( $monitors->{$ip}->{'HASH'}, $alarmtypeval{$type}, $type, $type );
             $alarm->{$tid}->{$ip}->{$type}->{"isActive"} = 1;
-            print "$ip - $time - monitor updated by $type \n";
+            print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." updated by $type \n";
             return 1;
           }
      if ($function eq 'Modect' or $function eq 'Mocord') {
          zmMonitorResume( $monitors->{$ip}->{'HASH'} );
-         print "$ip - $time - monitor resumed by $type \n";
+         print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." resumed by $type \n";
          $alarm->{$tid}->{$ip}->{$type}->{"isActive"} = 1;
          return 1;
        }
@@ -230,7 +231,7 @@ sub skipcheck {
            foreach my $type ( keys %{$alarm->{$tid}->{$ip}} ) {
 		if (exists $alarm->{$tid}->{$ip}->{$type}->{'isActive'}) {
                    if ( $alarm->{$tid}->{$ip}->{$type}->{'isActive'} ) {
-			print "$ip - $time - Currently Active Alarm Type - $type\n";
+			print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." Currently Active Alarm Type - $type\n";
 			push (@ret, $type);
                      }
 		 }
@@ -248,19 +249,19 @@ sub disablezmalarm {
  my $function = $monitors->{$ip}->{'FUNCT'};
  my $activecount = scalar @activetype;
  my $time = scalar(localtime);
- print "$ip - $time - Currently Active Alarm Count - $activecount\n";
+ print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." Currently Active Alarm Count - $activecount\n";
  &validatemem($ip);
 
  if ( $function eq 'Modect' or $function eq 'Mocord' ) { #need to figure out how to check if the monitor is suspended, get auto resume time
               if ($activecount > 1) {
-                  print "$ip - $time - monitor suspended\n";
+                  print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." suspended\n";
                   delete $alarm->{$tid}->{$ip}->{$type}; #just delete the active alarm from the hash because we have other active ones
                   return 1;
                 }
               if ($activecount eq 1) {
                   $monitors->{$ip}->{'RESUS'} = ($params->{'SUS_TM'} + time) - 2;
                   zmMonitorSuspend( $monitors->{$ip}->{'HASH'} ); #suspend the ZM motion detection because our camera motion event cleared
-                  print "$ip - $time - monitor suspended\n";
+                  print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." suspended\n";
                   $alarm->{$tid}->{$ip}->{$type}->{"isActive"} = 0; #clear the active flag
                 #  delete $alarm->{$tid}->{$ip}->{$type}->{'dateTime'}; #delete the date so we dont continue to check it
                   return 1;
@@ -268,7 +269,7 @@ sub disablezmalarm {
                if (time >= $monitors->{$ip}->{'RESUS'} ) {
                   $monitors->{$ip}->{'RESUS'} = ($params->{'SUS_TM'} + time) - 2; # set the resume time, adding the ZM configured time to the current time
                   zmMonitorSuspend( $monitors->{$ip}->{'HASH'} ); #resuspend the ZM motion detection due to the ZM auto resume feature 
-		  print "$ip - $time - monitor REsuspended\n";
+		  print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." REsuspended\n";
                   return 1;
                 }
          }
@@ -277,7 +278,7 @@ sub disablezmalarm {
  if ( ($function eq 'Record' or $function eq 'Nodect') and (zmIsAlarmed($monitors->{$ip}->{'HASH'}) and $activecount eq 1) ) {
               #zmTriggerEventOff( $monitors->{$ip}->{'HASH'} );
               zmTriggerEventCancel( $monitors->{$ip}->{'HASH'} );
-              print "$ip - $time - monitor $type disabled\n";
+              print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." type - $type disabled\n";
               delete $alarm->{$tid}->{$ip}->{$type};
 	      return 1;
          }
@@ -292,7 +293,7 @@ sub disablezmalarm {
 
 	      if (!$pname eq "" ) { 
 		zmTriggerEventOn($monitors->{$ip}->{'HASH'}, $alarmtypeval{$pname}, $pname, $pname );  
-              	print "$ip - $time - monitor $type key deleted (ZM alarm is still active due to another alarm)\n";
+              	print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." type - $type key deleted (ZM alarm is still active due to another alarm)\n";
               	delete $alarm->{$tid}->{$ip}->{$type};
               	return 1;
 		}
@@ -306,16 +307,18 @@ sub disablezmalarm {
 sub validatemem {
    my $ip = $_[0];
    my $time = scalar(localtime);
+   unless (defined ($ip)) { print "$time - Error: Something went wrong in validatemem, IP is not defined."; return }
+   unless (exists $monitors->{$ip}->{'HASH'}) { print "$ip - $time - Error: Something went wrong in validatemem, \$monitors->\{$ip\}->\{\'HASH\'\} is not defined"; return }
    my $mr = zmMemRead($monitors->{$ip}->{'HASH'}, "shared_data:valid");
    print ("$ip - $time - Checking Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." MemReadResult:$mr Name:".$monitors->{$ip}->{'HASH'}->{Name}." MMap address:".$monitors->{$ip}->{'HASH'}->{MMapAddr}."\n");
          while ($mr!="1") {
                  zmMemInvalidate($monitors->{$ip}->{'HASH'});
                  my $mv =zmMemVerify($monitors->{$ip}->{'HASH'});
 		if (!defined($mv)) { 
-		    print ("$ip - $time - Cant verify memory for ".$monitors->{$ip}->{'HASH'}->{Id}.", zoneminder may be stopped\n");
+		    print ("$ip - $time - Cant verify memory for monitor ".$monitors->{$ip}->{'HASH'}->{Id}.", zoneminder may be stopped\n");
 		    $mr = 0; sleep 3;
 		} else {
-                    print ("$ip - $time - Reloading memory for ".$monitors->{$ip}->{'HASH'}->{Id}.", status of verify is:$mv\n");
+                    print ("$ip - $time - Reloading memory for monitor ".$monitors->{$ip}->{'HASH'}->{Id}.", status of verify is:$mv\n");
                     $mr = zmMemRead($monitors->{$ip}->{'HASH'}, "shared_data:valid");
 		} 
          }
