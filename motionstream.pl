@@ -8,7 +8,7 @@ use DBI;
 use LWP::UserAgent;
 use Fcntl ':flock';
 
-# Version 1.2.1
+# Version 1.2.2
 
 my $alarmdelay = 60; #amount of time in seconds we wait before marking the motion event inactive
 my $matchstr = '_mol-'; #Find any monitor with "_mol-" in the name. This can be changed to anything you like.
@@ -309,9 +309,12 @@ sub validatemem {
    my $time = scalar(localtime);
    unless (defined ($ip)) { print "$time - Error: Something went wrong in validatemem, IP is not defined."; return }
    unless (exists $monitors->{$ip}->{'HASH'}) { print "$ip - $time - Error: Something went wrong in validatemem, \$monitors->\{$ip\}->\{\'HASH\'\} is not defined"; return }
+   unless (exists $monitors->{$ip}->{'HASH'}->{Id}) { print "$ip - $time - Error: Something went wrong in validatemem, \$monitors->\{$ip\}->\{\'HASH\'\}->\{\'Id\'\} is not defined"; return }
    my $mr = zmMemRead($monitors->{$ip}->{'HASH'}, "shared_data:valid");
    print ("$ip - $time - Checking Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." MemReadResult:$mr Name:".$monitors->{$ip}->{'HASH'}->{Name}." MMap address:".$monitors->{$ip}->{'HASH'}->{MMapAddr}."\n");
          while ($mr!="1") {
+  	         unless (exists $monitors->{$ip}->{'HASH'}) { print "$ip - $time - Error: Something went wrong in validatemem loop, \$monitors->\{$ip\}->\{\'HASH\'\} is not defined"; return }
+   		 unless (exists $monitors->{$ip}->{'HASH'}->{Id}) { print "$ip - $time - Error: Something went wrong in validatemem loop, \$monitors->\{$ip\}->\{\'HASH\'\}->\{\'Id\'\} is not defined"; return }
                  zmMemInvalidate($monitors->{$ip}->{'HASH'});
                  my $mv =zmMemVerify($monitors->{$ip}->{'HASH'});
 		if (!defined($mv)) { 
