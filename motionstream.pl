@@ -8,7 +8,7 @@ use DBI;
 use LWP::UserAgent;
 use Fcntl ':flock';
 
-# Version 1.2.2
+# Version 1.2.3
 
 my $alarmdelay = 60; #amount of time in seconds we wait before marking the motion event inactive
 my $matchstr = '_mol-'; #Find any monitor with "_mol-" in the name. This can be changed to anything you like.
@@ -18,14 +18,14 @@ my $PidPath = "/var/run/motionstream.pid"; #Create pid file so only 1 instance c
 my $LogPath = "/var/log/";
 my $ISAPI = '/ISAPI'; #In some camera models this is not in the path, set to "my $ISAPI = ''" if the script does not work.
 # You can test with the following curl command, it does not work try with out the /ISAPI
-# curl -s -S -N -u username:password http://192.168.1.10/ISAPI/System/time/localTime  
+# curl -s -S -N -u username:password http://192.168.1.10/ISAPI/System/time/localTime
 
 my %alarmtypeval; # Set zoneminder score for detection types
-$alarmtypeval{'VMD'} = '100'; 		 # Motion Detection
+$alarmtypeval{'VMD'} = '100';            # Motion Detection
 $alarmtypeval{'shelteralarm'} = '120';   # Video Tampering
 $alarmtypeval{'fielddetection'} = '140'; # Intrusion Detection
 $alarmtypeval{'linedetection'} = '150';  # Line Crossing Detection
-$alarmtypeval{'PIR'} = '200';		 # IR Motion Detection  
+$alarmtypeval{'PIR'} = '200';            # IR Motion Detection
 
 my %alarm;
 my %monitors;
@@ -311,7 +311,7 @@ sub validatemem {
    unless (exists $monitors->{$ip}->{'HASH'}) { print "$ip - $time - Error: Something went wrong in validatemem, \$monitors->\{$ip\}->\{\'HASH\'\} is not defined"; return }
    unless (exists $monitors->{$ip}->{'HASH'}->{Id}) { print "$ip - $time - Error: Something went wrong in validatemem, \$monitors->\{$ip\}->\{\'HASH\'\}->\{\'Id\'\} is not defined"; return }
    my $mr = zmMemRead($monitors->{$ip}->{'HASH'}, "shared_data:valid");
-   print ("$ip - $time - Checking Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." MemReadResult:$mr Name:".$monitors->{$ip}->{'HASH'}->{Name}." MMap address:".$monitors->{$ip}->{'HASH'}->{MMapAddr}."\n");
+   print "$ip - $time - Checking Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." MemReadResult:$mr Name:".$monitors->{$ip}->{'HASH'}->{Name}." MMap address:".$monitors->{$ip}->{'HASH'}->{MMapAddr}."\n";
          while ($mr!="1") {
   	         unless (exists $monitors->{$ip}->{'HASH'}) { print "$ip - $time - Error: Something went wrong in validatemem loop, \$monitors->\{$ip\}->\{\'HASH\'\} is not defined"; return }
    		 unless (exists $monitors->{$ip}->{'HASH'}->{Id}) { print "$ip - $time - Error: Something went wrong in validatemem loop, \$monitors->\{$ip\}->\{\'HASH\'\}->\{\'Id\'\} is not defined"; return }
@@ -366,7 +366,8 @@ my @ipcred; my $sql; my $sth; my $res; my $cred;
 
 	my $dbh = zmDbConnect();
         $sql = "select Host,Id,Name,Function,Type,Path from Monitors where find_in_set( Function, 'Modect,Record,Nodect,Mocord' )";
-        $sth = $dbh->prepare_cached( $sql ) or Fatal( "Can't prepare '$sql': ".$dbh->errstr() );
+        #$sql = "select * from Monitors where find_in_set( Function, 'Modect,Record,Nodect,Mocord' )".( $Config{ZM_SERVER_ID} ? 'AND ServerId=?' : '' );
+	$sth = $dbh->prepare_cached( $sql ) or Fatal( "Can't prepare '$sql': ".$dbh->errstr() );
         $res = $sth->execute() or Fatal( "Can't execute: ".$sth->errstr() );
         while( my $row = $sth->fetchrow_hashref() )
         {
@@ -384,6 +385,11 @@ my @ipcred; my $sql; my $sth; my $res; my $cred;
                   $monitors->{$ipcred[1]}->{'CREDS'} = $ipcred[0];
                   $monitors->{$ipcred[1]}->{'HASH'} = $row;
 		  $monitors->{$ipcred[1]}->{'FUNCT'} = $row->{Function};
+    		  if ( zmMemVerify( $row ) ) { # This will re-init shared memory
+        		$monitors->{$ipcred[1]}->{LastState} = zmGetMonitorState( $row );
+        		$monitors->{$ipcred[1]}->{LastEvent} = zmGetLastEvent( $row );
+			#print "Monitor: ".$monitors->{$ipcred[1]}->{'ID'}." LastState: ". $monitors->{$ipcred[1]}->{LastState} ." LastEvent: ". $monitors->{$ipcred[1]}->{LastEvent}."\n";
+    		  }
 
         }
 	$sql = "select Value from Config where Name = 'ZM_MAX_SUSPEND_TIME'";
