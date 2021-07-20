@@ -8,9 +8,10 @@ use DBI;
 use LWP::UserAgent;
 use Fcntl ':flock';
 
-# Version 1.2.3
+# Version 1.2.4
+use constant MONITOR_RELOAD_INTERVAL => 300;
 
-my $alarmdelay = 60; #amount of time in seconds we wait before marking the motion event inactive
+my $alarmdelay = 30; #amount of time in seconds we wait before marking the motion event inactive
 my $matchstr = '_mol-'; #Find any monitor with "_mol-" in the name. This can be changed to anything you like.
 my $httptimeout = 40; #Amount of time we wait before saying the http stream is timed out in seconds
 my $httpretry = 30; #Amount of time we wait before trying to reconnect to a timeout http stream in seconds
@@ -61,35 +62,36 @@ sub startthreads
 sub startstream {
  my $thr = threads->self(); my $tid = $thr->tid;
  my ($creds, $ip) = @_;
- #my $FH = $monitors->{$ip}->{'FH'};
-  #open($monitors->{$ip}->{'FH'}, '>>', $LogPath."motionstream-$ip.log");
-  #print {$monitors->{$ip}->{'FH'}} "Starting thread $tid for IP $ip\n";
- # open(FH, '>>', $LogPath."motionstream-$ip.log");
- # print FH "Starting thread $tid for IP $ip\n";
-my $OUTFILE;
-open $OUTFILE, '>>', $LogPath."motionstream-$ip.log"
-    or print "Cannot open $files: $OS_ERROR";
-print { $OUTFILE } "Starting thread $tid for IP $ip\n"
-    or print "Cannot write to $files: $OS_ERROR";
 
-  print scalar(localtime)." - Starting thread $tid for IP $ip\n";
-$alarm->{$tid} = $ip;
-my $ua = LWP::UserAgent->new();
- $ua->timeout($httptimeout);
- my $req = $ua->get('http://'.$creds.'@'.$ip.$ISAPI.'/Event/notification/alertStream',
-                                        ':content_cb' => \&ReadStream,
-                                        ':read_size_hint' => 540,);
+	# $|=1; # autoflush
+	#  my $FH = $monitors->{$ip}->{'FH'};
+	#  open(FH, '>>', $LogPath."motionstream-$ip.log")
+	#	or warn "Cannot open $files: $OS_ERROR";
+	#  print FH "Starting thread $tid for IP $ip\n"
+	#	or warn "Cannot write to $files: $OS_ERROR";
 
-
-  if ($req->code) {
-        print "$ip - ".scalar(localtime)." - timed out!!!! Retrying\n";
-	$rcvbuf->{$tid} = '';
-	sleep $httpretry;
-	&startstream($monitors->{$ip}->{'CREDS'},$ip);
-  }
-
+ 	warn scalar(localtime)." - Starting thread $tid for IP $ip\n";
+	$alarm->{$tid} = $ip;
+	&cameraconnect($creds,$ip,$tid);
 }
 
+
+sub cameraconnect { 
+	my ($creds, $ip, $tid) = @_;
+	my $ua = LWP::UserAgent->new();
+ 	$ua->timeout($httptimeout);
+ 	my $req = $ua->get('http://'.$creds.'@'.$ip.$ISAPI.'/Event/notification/alertStream',
+                                        		':content_cb' => \&ReadStream,
+                                        		':read_size_hint' => 540,);
+
+
+  	if ($req->code) {
+        	warn "$ip - ".scalar(localtime)." - timed out! - HTTPCode: ". $req->code ." -- Retrying\n";
+        	$rcvbuf->{$tid} = '';
+        	sleep $httpretry;
+        	&cameraconnect($monitors->{$ip}->{'CREDS'},$ip,$tid);
+  	}
+}
 
 sub ReadStream {
  my($msg, $response) = @_;
@@ -99,7 +101,7 @@ sub ReadStream {
  $msg = $rcvbuf->{$tid}.$msg if (defined $rcvbuf->{$tid}); #add the buffer to the start of the message
  $rcvbuf->{$tid} = ''; my $Chunk = '';
 
-#print $msg;
+ #print $msg;
 
 while (1) {
   if ($msg  =~ m/(<ipAddress>)(.*?)--boundary(.*)/s) {
@@ -157,7 +159,7 @@ sub activatezmalarm {
    if ( !zmIsAlarmed( $monitors->{$ip}->{'HASH'} ) and ($function eq 'Record' or $function eq 'Nodect') ) {
 	   zmTriggerEventCancel( $monitors->{$ip}->{'HASH'} );
            zmTriggerEventOn( $monitors->{$ip}->{'HASH'}, $alarmtypeval{$type}, $type, $type );
-           print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." triggered by $type\n";
+           warn "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." triggered by $type\n";
            $alarm->{$tid}->{$ip}->{$type}->{"isActive"} = 1;
            return 1;
          }
@@ -166,12 +168,12 @@ sub activatezmalarm {
 	    zmTriggerEventCancel( $monitors->{$ip}->{'HASH'} );
             zmTriggerEventOn( $monitors->{$ip}->{'HASH'}, $alarmtypeval{$type}, $type, $type );
             $alarm->{$tid}->{$ip}->{$type}->{"isActive"} = 1;
-            print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." updated by $type \n";
+            warn "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." updated by $type \n";
             return 1;
           }
      if ($function eq 'Modect' or $function eq 'Mocord') {
          zmMonitorResume( $monitors->{$ip}->{'HASH'} );
-         print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." resumed by $type \n";
+         warn "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." resumed by $type \n";
          $alarm->{$tid}->{$ip}->{$type}->{"isActive"} = 1;
          return 1;
        }
@@ -187,9 +189,9 @@ sub activatezmalarm {
            foreach my $type ( keys %{$alarm->{$tid}->{$ip}} ) {
 		my $skipchk = &skipcheck($ip ,$type);
 		if ($skipchk eq 1) {
-                   #print "CHecking $tid -> $ip -> $type -> dateTime for activity\n";                 
+			#warn "CHecking $tid -> $ip -> $type -> dateTime for activity\n";                 
                    if (&isAlarmInactive($alarm->{$tid}->{$ip}->{$type}->{'dateTime'},$ip)) {
-			 print "$ip - $time - Disabling $tid -> $ip -> $type -> dateTime due to inactivity\n";
+			 warn "$ip - $time - Disabling $tid -> $ip -> $type -> dateTime due to inactivity\n";
                          &disablezmalarm($ip, $type); #disable zoneminder alert
                     }
 		 }
@@ -199,6 +201,18 @@ sub activatezmalarm {
 
 
               }
+   #We have to free the memory handle so they don't constantly grow
+   #print "last reload time ".$monitors->{$ip}->{lastReload}."\n";
+   if (exists $monitors->{$ip}->{lastReload} ) { 
+	my $lastreload = $monitors->{$ip}->{lastReload};
+	if ( defined($lastreload) ) { 
+		if ( ( time() - $lastreload ) > MONITOR_RELOAD_INTERVAL ) {
+			&validatemem($ip);
+		}
+	}
+   } else { 
+	$monitors->{$ip}->{lastReload} = time();
+   }
   }
 
 
@@ -231,7 +245,7 @@ sub skipcheck {
            foreach my $type ( keys %{$alarm->{$tid}->{$ip}} ) {
 		if (exists $alarm->{$tid}->{$ip}->{$type}->{'isActive'}) {
                    if ( $alarm->{$tid}->{$ip}->{$type}->{'isActive'} ) {
-			print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." Currently Active Alarm Type - $type\n";
+			warn "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." Currently Active Alarm Type - $type\n";
 			push (@ret, $type);
                      }
 		 }
@@ -249,19 +263,19 @@ sub disablezmalarm {
  my $function = $monitors->{$ip}->{'FUNCT'};
  my $activecount = scalar @activetype;
  my $time = scalar(localtime);
- print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." Currently Active Alarm Count - $activecount\n";
+ warn "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." Currently Active Alarm Count - $activecount\n";
  &validatemem($ip);
 
  if ( $function eq 'Modect' or $function eq 'Mocord' ) { #need to figure out how to check if the monitor is suspended, get auto resume time
               if ($activecount > 1) {
-                  print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." suspended\n";
+                  warn "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." suspended\n";
                   delete $alarm->{$tid}->{$ip}->{$type}; #just delete the active alarm from the hash because we have other active ones
                   return 1;
                 }
               if ($activecount eq 1) {
                   $monitors->{$ip}->{'RESUS'} = ($params->{'SUS_TM'} + time) - 2;
                   zmMonitorSuspend( $monitors->{$ip}->{'HASH'} ); #suspend the ZM motion detection because our camera motion event cleared
-                  print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." suspended\n";
+                  warn "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." suspended\n";
                   $alarm->{$tid}->{$ip}->{$type}->{"isActive"} = 0; #clear the active flag
                 #  delete $alarm->{$tid}->{$ip}->{$type}->{'dateTime'}; #delete the date so we dont continue to check it
                   return 1;
@@ -269,7 +283,7 @@ sub disablezmalarm {
                if (time >= $monitors->{$ip}->{'RESUS'} ) {
                   $monitors->{$ip}->{'RESUS'} = ($params->{'SUS_TM'} + time) - 2; # set the resume time, adding the ZM configured time to the current time
                   zmMonitorSuspend( $monitors->{$ip}->{'HASH'} ); #resuspend the ZM motion detection due to the ZM auto resume feature 
-		  print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." REsuspended\n";
+		  warn "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." REsuspended\n";
                   return 1;
                 }
          }
@@ -278,7 +292,7 @@ sub disablezmalarm {
  if ( ($function eq 'Record' or $function eq 'Nodect') and (zmIsAlarmed($monitors->{$ip}->{'HASH'}) and $activecount eq 1) ) {
               #zmTriggerEventOff( $monitors->{$ip}->{'HASH'} );
               zmTriggerEventCancel( $monitors->{$ip}->{'HASH'} );
-              print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." type - $type disabled\n";
+              warn "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." type - $type disabled\n";
               delete $alarm->{$tid}->{$ip}->{$type};
 	      return 1;
          }
@@ -293,7 +307,7 @@ sub disablezmalarm {
 
 	      if (!$pname eq "" ) { 
 		zmTriggerEventOn($monitors->{$ip}->{'HASH'}, $alarmtypeval{$pname}, $pname, $pname );  
-              	print "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." type - $type key deleted (ZM alarm is still active due to another alarm)\n";
+              	warn "$ip - $time - Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." type - $type key deleted (ZM alarm is still active due to another alarm)\n";
               	delete $alarm->{$tid}->{$ip}->{$type};
               	return 1;
 		}
@@ -307,24 +321,38 @@ sub disablezmalarm {
 sub validatemem {
    my $ip = $_[0];
    my $time = scalar(localtime);
-   unless (defined ($ip)) { print "$time - Error: Something went wrong in validatemem, IP is not defined."; return }
-   unless (exists $monitors->{$ip}->{'HASH'}) { print "$ip - $time - Error: Something went wrong in validatemem, \$monitors->\{$ip\}->\{\'HASH\'\} is not defined"; return }
-   unless (exists $monitors->{$ip}->{'HASH'}->{Id}) { print "$ip - $time - Error: Something went wrong in validatemem, \$monitors->\{$ip\}->\{\'HASH\'\}->\{\'Id\'\} is not defined"; return }
-   my $mr = zmMemRead($monitors->{$ip}->{'HASH'}, "shared_data:valid");
-   print "$ip - $time - Checking Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." MemReadResult:$mr Name:".$monitors->{$ip}->{'HASH'}->{Name}." MMap address:".$monitors->{$ip}->{'HASH'}->{MMapAddr}."\n";
-         while ($mr!="1") {
-  	         unless (exists $monitors->{$ip}->{'HASH'}) { print "$ip - $time - Error: Something went wrong in validatemem loop, \$monitors->\{$ip\}->\{\'HASH\'\} is not defined"; return }
-   		 unless (exists $monitors->{$ip}->{'HASH'}->{Id}) { print "$ip - $time - Error: Something went wrong in validatemem loop, \$monitors->\{$ip\}->\{\'HASH\'\}->\{\'Id\'\} is not defined"; return }
-                 zmMemInvalidate($monitors->{$ip}->{'HASH'});
-                 my $mv =zmMemVerify($monitors->{$ip}->{'HASH'});
-		if (!defined($mv)) { 
-		    print ("$ip - $time - Cant verify memory for monitor ".$monitors->{$ip}->{'HASH'}->{Id}.", zoneminder may be stopped\n");
-		    $mr = 0; sleep 3;
-		} else {
-                    print ("$ip - $time - Reloading memory for monitor ".$monitors->{$ip}->{'HASH'}->{Id}.", status of verify is:$mv\n");
-                    $mr = zmMemRead($monitors->{$ip}->{'HASH'}, "shared_data:valid");
-		} 
-         }
+   unless (defined ($ip)) { warn "$time - Error: Something went wrong in validatemem, IP is not defined."; return }
+   unless (exists $monitors->{$ip}->{'HASH'}) { warn "$ip - $time - Error: Something went wrong in validatemem, \$monitors->\{$ip\}->\{\'HASH\'\} is not defined"; return }
+   unless (exists $monitors->{$ip}->{'HASH'}->{Id}) { warn "$ip - $time - Error: Something went wrong in validatemem, \$monitors->\{$ip\}->\{\'HASH\'\}->\{\'Id\'\} is not defined"; return }
+   $monitors->{$ip}->{lastReload} = time();
+   #my $mr = zmMemRead($monitors->{$ip}->{'HASH'}, "shared_data:valid");
+   
+   my $mr = zmMemVerify($monitors->{$ip}->{'HASH'});
+   $mr = 0 unless (defined($mr)); 
+   warn "$ip - $time - Checking Monitor ".$monitors->{$ip}->{'HASH'}->{Id}." MemReadResult:$mr Name:".$monitors->{$ip}->{'HASH'}->{Name}." MMap address:".$monitors->{$ip}->{'HASH'}->{MMapAddr}."\n";
+   #my $lc = 0;
+   zmMemInvalidate($monitors->{$ip}->{'HASH'});
+   my $mv = zmMemVerify($monitors->{$ip}->{'HASH'});
+   $monitors->{$ip}->{LastState} = zmGetMonitorState( $monitors->{$ip}->{'HASH'} );
+   $monitors->{$ip}->{LastEvent} = zmGetLastEvent( $monitors->{$ip}->{'HASH'} );
+        # while ( ! $mr ) {
+  	#         unless (exists $monitors->{$ip}->{'HASH'}) { warn "$ip - $time - Error: Something went wrong in validatemem loop, \$monitors->\{$ip\}->\{\'HASH\'\} is not defined"; return }
+   	#	 unless (exists $monitors->{$ip}->{'HASH'}->{Id}) { warn "$ip - $time - Error: Something went wrong in validatemem loop, \$monitors->\{$ip\}->\{\'HASH\'\}->\{\'Id\'\} is not defined"; return }
+        #         zmMemInvalidate($monitors->{$ip}->{'HASH'});
+        #         my $mv = zmMemVerify($monitors->{$ip}->{'HASH'});
+	#	 $monitors->{$ip}->{LastState} = zmGetMonitorState( $monitors->{$ip}->{'HASH'} );
+	#	 $monitors->{$ip}->{LastEvent} = zmGetLastEvent( $monitors->{$ip}->{'HASH'} );
+	#	if (!defined($mv)) { 
+	#	    warn ("$ip - $time - Cant verify memory for monitor ".$monitors->{$ip}->{'HASH'}->{Id}.", zoneminder may be stopped\n");
+	#	    $mr = 0; sleep 15;
+	#	} else {
+        #            warn ("$ip - $time - Reloading memory for monitor ".$monitors->{$ip}->{'HASH'}->{Id}.", status of verify is:$mv\n");
+        #            #$mr = zmMemRead($monitors->{$ip}->{'HASH'}, "shared_data:valid");
+	#	    $mr = zmMemVerify($monitors->{$ip}->{'HASH'});
+	#	}
+	#	if ($lc eq 6) { $mr = 1 } #Max loops
+	#	$lc++; 
+        # }
 }
 
 
@@ -381,13 +409,16 @@ my @ipcred; my $sql; my $sth; my $res; my $cred;
 		     $cred = $row->{Host};
 		   }
                   @ipcred = split('@', $cred);
-                  $monitors->{$ipcred[1]}->{'ID'} = $row->{Id};
-                  $monitors->{$ipcred[1]}->{'CREDS'} = $ipcred[0];
-                  $monitors->{$ipcred[1]}->{'HASH'} = $row;
-		  $monitors->{$ipcred[1]}->{'FUNCT'} = $row->{Function};
+		  my $ip = $ipcred[1];
+		  my $userpass = $ipcred[0];
+                  $monitors->{$ip}->{'ID'} = $row->{Id};
+                  $monitors->{$ip}->{'CREDS'} = $userpass;
+                  $monitors->{$ip}->{'HASH'} = $row;
+		  $monitors->{$ip}->{'FUNCT'} = $row->{Function};
     		  if ( zmMemVerify( $row ) ) { # This will re-init shared memory
-        		$monitors->{$ipcred[1]}->{LastState} = zmGetMonitorState( $row );
-        		$monitors->{$ipcred[1]}->{LastEvent} = zmGetLastEvent( $row );
+        		$monitors->{$ip}->{LastState} = zmGetMonitorState( $row );
+        		$monitors->{$ip}->{LastEvent} = zmGetLastEvent( $row );
+			$monitors->{$ip}->{lastReload} = time();
 			#print "Monitor: ".$monitors->{$ipcred[1]}->{'ID'}." LastState: ". $monitors->{$ipcred[1]}->{LastState} ." LastEvent: ". $monitors->{$ipcred[1]}->{LastEvent}."\n";
     		  }
 
@@ -400,7 +431,6 @@ my @ipcred; my $sql; my $sth; my $res; my $cred;
                   $params->{'SUS_TM'} = $row->{Value};
 	}
 }
-
 
 
 ############## Not used ################################
