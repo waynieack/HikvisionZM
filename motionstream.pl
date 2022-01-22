@@ -389,12 +389,12 @@ sub loadMonitors
 #my $ip = $_[0] if (defined $_[0]);
 my @ipcred; my $sql; my $sth; my $res; my $cred;
 
-#if (defined $ip) { $sql = "select Host,Id,Name,Function from Monitors WHERE Host like '%$ip'" }
-#else { $sql = "select Host,Id,Name,Function from Monitors where find_in_set( Function, 'Modect,Record,Nodect,Mocord' )" }
+#if (defined $ip) { $sql = "select Host,Id,Name,`Function` from Monitors WHERE Host like '%$ip'" }
+#else { $sql = "select Host,Id,Name,`Function` from Monitors where find_in_set( `Function`, 'Modect,Record,Nodect,Mocord' )" }
 
 	my $dbh = zmDbConnect();
-        $sql = "select Host,Id,Name,Function,Type,Path from Monitors where find_in_set( Function, 'Modect,Record,Nodect,Mocord' )";
-        #$sql = "select * from Monitors where find_in_set( Function, 'Modect,Record,Nodect,Mocord' )".( $Config{ZM_SERVER_ID} ? 'AND ServerId=?' : '' );
+        $sql = "select Host,Id,Name,`Function`,Type,Path from Monitors where find_in_set( `Function`, 'Modect,Record,Nodect,Mocord' )";
+        #$sql = "select * from Monitors where find_in_set( `Function`, 'Modect,Record,Nodect,Mocord' )".( $Config{ZM_SERVER_ID} ? 'AND ServerId=?' : '' );
 	$sth = $dbh->prepare_cached( $sql ) or Fatal( "Can't prepare '$sql': ".$dbh->errstr() );
         $res = $sth->execute() or Fatal( "Can't execute: ".$sth->errstr() );
         while( my $row = $sth->fetchrow_hashref() )
