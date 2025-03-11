@@ -36,8 +36,8 @@
  -  $alarmtypeval{'linedetection'} = '150';  #Set the score for the Line crossing detection event type here
  -  $alarmtypeval{'PIR'} = '200';  #Set the score for the IR Motion Detection event type here
  -  my $ISAPI = '/ISAPI'; #In some camera models this is not in the path, set to "my $ISAPI = ''" if the script does not work.
- -  You can test with the following curl command, it does not work try with out the /ISAPI
- -  curl -s -S -N -u username:password http://192.168.1.10/ISAPI/System/time/localTime
+ - - You can test with the following curl command, it does not work try with out the /ISAPI
+ - - `curl -s -S -N -u username:password http://192.168.1.10/ISAPI/System/time/localTime`
 
 
 ##### ZoneMinder Camera Settings (DS-2CD2332-I):
