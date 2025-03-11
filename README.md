@@ -17,7 +17,9 @@
  - This script must be run on the zoneminder server and the following perl modules are required: Time::Piece, threads, ZoneMinder, DBI, LWP::UserAgent. You can use cpan or your distros repo to install them, the cpan command would be: 
  - cpan install Time::Piece threads DBI LWP::UserAgent
    
- - Note - when configuring motion detection on the camera, the only thing that needs to be enabled is the detection type you want and the schedule. The schedule by default is set to enabled 24x7 when the detection type is enabled, but if you change it then during the disabled times the camera will not send events to the script. 
+ - Notes:
+ -  - When configuring motion detection on the camera, the only thing that needs to be enabled is the detection type you want and the schedule. The schedule by default is set to enabled 24x7 when the detection type is enabled, but if you change it then during the disabled times the camera will not send events to the script.
+ -  - Some cameras have a section in the advanced settings where you can enable the CGI API and add a user. You also need to enable Basic auth in the same section.
 
 
 ##### TODO: 
