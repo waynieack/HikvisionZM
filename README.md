@@ -2,6 +2,7 @@
 ###Hikvision ZoneMinder plugin to use in camera motion detection
 
 ###Version 1.3.0 has been updated to support ZM 1.37
+###Use version 1.2.4 for older ZM versions
 
 #####What it does:
  - connects to the zoneminder database looks for all monitors with the specified string "$matchstr" on the end of the name. Default: "_mol-" (so your monitor name in zoneminder would be "mymonitor_mol-") There may be a better way to do this, I'm open to suggestions. 
